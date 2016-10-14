@@ -3,16 +3,18 @@ package gemini
 import (
 	"crypto/hmac"
 	"crypto/sha512"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
-	"fmt"
 )
 
 var (
@@ -23,6 +25,7 @@ var (
 type API struct {
 	APIKey    string
 	APISecret string
+	client    *http.Client
 }
 
 // ErrorMessage ...
@@ -48,8 +51,8 @@ type Orderbook struct {
 }
 
 type OrderbookOffer struct {
-	Price     float64 `json:"price,string"`     // price
-	Amount    float64 `json:"amount,string"`    // amount
+	Price  float64 `json:"price,string"`  // price
+	Amount float64 `json:"amount,string"` // amount
 }
 
 type OrderStatus struct {
@@ -59,7 +62,7 @@ type OrderStatus struct {
 	AvgExecutionPrice float64 `json:"avg_execution_price,string"` // avg_execution_price: The average price at which this order as been executed so far. 0 if the order has not been executed at all.
 	Side              string  `json:"side, string"`               // side: Either “buy” or “sell”.
 	Type              string  `json:"type, string"`               // type: Will always be “exchange limit”
-	Timestamp         float64 `json:"timestampms"`         // timestampms: The timestamp the order was submitted in milliseconds.
+	Timestamp         float64 `json:"timestampms"`                // timestampms: The timestamp the order was submitted in milliseconds.
 	Live              bool    `json:"is_live,bool"`               // is_live: true if the order is active on the book (has remaining quantity and has not been canceled)
 	Canceled          bool    `json:"is_cancelled,bool"`          // is_cancelled: true if the order has been canceled. Note the spelling, “cancelled” instead of “canceled”. This is for compatibility reasons.
 	Forced            bool    `json:"was_forced,bool"`            // was_forced: Will always be false.
@@ -89,9 +92,22 @@ type WalletBalances map[string]WalletBalance
 
 // New returns a new Bitfinex API instance
 func New(key, secret, url string) (api *API) {
+	var tr *http.Transport
+	dialContext := (&net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 5 * time.Minute,
+	}).DialContext
+	tr = &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
+		DialContext:     dialContext,
+	}
+	client := &http.Client{
+		Transport: tr,
+	}
 	api = &API{
 		APIKey:    key,
 		APISecret: secret,
+		client:    client,
 	}
 	if url != "" {
 		ApiUrl = url
@@ -125,7 +141,7 @@ func (api *API) Orderbook(symbol string, limitBids, limitAsks int) (orderbook Or
 
 // WalletBalances return your balances.
 func (api *API) WalletBalances() (wallet WalletBalances, err error) {
-	request := map[string]interface{} {
+	request := map[string]interface{}{
 		"request": "/v1/balances",
 	}
 
@@ -195,7 +211,7 @@ func (api *API) Trades(symbol string, since int64, limitTrades int, includeBreak
 
 // ActiveOrders returns an array of your active orders.
 func (api *API) ActiveOrders() (orders Orders, err error) {
-	request := map[string]interface{} {
+	request := map[string]interface{}{
 		"request": "/v1/orders",
 	}
 
@@ -221,8 +237,8 @@ func (api *API) ActiveOrders() (orders Orders, err error) {
 
 // OrderStatus returns the status of an order given its id.
 func (api *API) OrderStatus(id int) (order OrderStatus, err error) {
-	request := map[string]interface{} {
-		"request": "/v1/order/status",
+	request := map[string]interface{}{
+		"request":  "/v1/order/status",
 		"order_id": id,
 	}
 
@@ -248,8 +264,8 @@ func (api *API) OrderStatus(id int) (order OrderStatus, err error) {
 
 // CancelOrder cancel an offer give its id.
 func (api *API) CancelOrder(id int) (err error) {
-	request := map[string]interface{} {
-		"request": "/v1/order/cancel",
+	request := map[string]interface{}{
+		"request":  "/v1/order/cancel",
 		"order_id": id,
 	}
 
@@ -279,12 +295,12 @@ func (api *API) CancelOrder(id int) (err error) {
 }
 
 func (api *API) NewOrder(currency string, amount, price float64, isBuy bool) (order OrderStatus, err error) {
-	request := map[string]interface{} {
+	request := map[string]interface{}{
 		"request": "/v1/order/new",
-		"symbol": currency,
-		"amount": strconv.FormatFloat(amount, 'f', -1, 64),
-		"price": strconv.FormatFloat(price, 'f', -1, 64),
-		"type": "exchange limit",
+		"symbol":  currency,
+		"amount":  strconv.FormatFloat(amount, 'f', -1, 64),
+		"price":   strconv.FormatFloat(price, 'f', -1, 64),
+		"type":    "exchange limit",
 	}
 
 	if isBuy {
@@ -346,7 +362,6 @@ func (api *API) post(payload map[string]interface{}) (body []byte, err error) {
 	signature := hex.EncodeToString(h.Sum(nil))
 
 	// POST
-	client := &http.Client{}
 	req, err := http.NewRequest("POST", ApiUrl+payload["request"].(string), nil)
 	if err != nil {
 		return
@@ -356,7 +371,7 @@ func (api *API) post(payload map[string]interface{}) (body []byte, err error) {
 	req.Header.Add("X-GEMINI-PAYLOAD", payloadBase64)
 	req.Header.Add("X-GEMINI-SIGNATURE", signature)
 
-	resp, err := client.Do(req)
+	resp, err := api.client.Do(req)
 	if err != nil {
 		return
 	}

@@ -122,10 +122,26 @@ func TestCancelOrder(t *testing.T) {
 	for _,order := range orders {
 		t.Log("Cancelling order # " + strconv.Itoa(order.OrderID))
 		err = apiPrivate.CancelOrder(order.OrderID)
+		err = apiPrivate.CancelOrder(order.OrderID)
 		if err != nil {
 			t.Error("Failed: " + err.Error())
 			return
 		}
+	}
+}
+
+func TestCancelUnknownOrder(t *testing.T) {
+	checkEnv(t)
+
+	t.Log("Cancelling order #666")
+	err = apiPrivate.CancelOrder(666)
+	if err != nil {
+		t.Error("Failed: " + err.Error())
+		return
+	}
+	if len(orders) == 0 {
+		t.Log("No active orders, nothing to cancel, please inspect")
+		return
 	}
 }
 
