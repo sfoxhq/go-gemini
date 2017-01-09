@@ -294,13 +294,14 @@ func (api *API) CancelOrder(id int) (err error) {
 	return
 }
 
-func (api *API) NewOrder(currency string, amount, price float64, isBuy bool) (order OrderStatus, err error) {
+func (api *API) NewOrder(currency string, amount, price float64, isBuy bool, clientOrderID string) (order OrderStatus, err error) {
 	request := map[string]interface{}{
-		"request": "/v1/order/new",
-		"symbol":  currency,
-		"amount":  strconv.FormatFloat(amount, 'f', -1, 64),
-		"price":   strconv.FormatFloat(price, 'f', -1, 64),
-		"type":    "exchange limit",
+		"request":         "/v1/order/new",
+		"symbol":          currency,
+		"amount":          strconv.FormatFloat(amount, 'f', -1, 64),
+		"price":           strconv.FormatFloat(price, 'f', -1, 64),
+		"type":            "exchange limit",
+		"client_order_id": clientOrderID,
 	}
 
 	if isBuy {
