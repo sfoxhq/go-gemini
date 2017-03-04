@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -91,7 +92,7 @@ type WalletBalance struct {
 type WalletBalances map[string]WalletBalance
 
 // New returns a new Bitfinex API instance
-func New(key, secret, url string) (api *API) {
+func New(key, secret, apiURL, proxy string) (api *API) {
 	var tr *http.Transport
 	dialContext := (&net.Dialer{
 		Timeout:   30 * time.Second,
@@ -101,6 +102,14 @@ func New(key, secret, url string) (api *API) {
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
 		DialContext:     dialContext,
 	}
+	if proxy != "" {
+		proxyURL, err := url.Parse(proxy)
+		if err != nil {
+			fmt.Printf("[ERROR] unable to parse proxy URL (%s)", proxy)
+		} else {
+			tr.Proxy = http.ProxyURL(proxyURL)
+		}
+	}
 	client := &http.Client{
 		Transport: tr,
 	}
@@ -109,8 +118,8 @@ func New(key, secret, url string) (api *API) {
 		APISecret: secret,
 		client:    client,
 	}
-	if url != "" {
-		ApiUrl = url
+	if apiURL != "" {
+		ApiUrl = apiURL
 	}
 	return api
 }
