@@ -18,15 +18,12 @@ import (
 	"time"
 )
 
-var (
-	ApiUrl = "https://api.gemini.com/"
-)
-
 // API structure stores Bitfinex API credentials
 type API struct {
 	APIKey    string
 	APISecret string
 	client    *http.Client
+	BaseURL   string
 }
 
 // ErrorMessage ...
@@ -117,9 +114,10 @@ func New(key, secret, apiURL, proxy string) (api *API) {
 		APIKey:    key,
 		APISecret: secret,
 		client:    client,
+		BaseURL:   "https://api.gemini.com",
 	}
 	if apiURL != "" {
-		ApiUrl = apiURL
+		api.BaseURL = apiURL
 	}
 	return api
 }
@@ -345,7 +343,7 @@ func (api *API) NewOrder(currency string, amount, price float64, isBuy bool, cli
 ///////////////////////////////////////
 
 func (api *API) get(url string) (body []byte, err error) {
-	resp, err := http.Get(ApiUrl + url)
+	resp, err := http.Get(api.BaseURL + url)
 	if err != nil {
 		return
 	}
@@ -372,7 +370,7 @@ func (api *API) post(payload map[string]interface{}) (body []byte, err error) {
 	signature := hex.EncodeToString(h.Sum(nil))
 
 	// POST
-	req, err := http.NewRequest("POST", ApiUrl+payload["request"].(string), nil)
+	req, err := http.NewRequest("POST", api.BaseURL+payload["request"].(string), nil)
 	if err != nil {
 		return
 	}
